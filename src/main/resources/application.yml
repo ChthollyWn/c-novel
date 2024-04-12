@@ -1,0 +1,35 @@
+# global
+server:
+  port: 8001
+  tomcat:
+    connection-timeout: 60000
+  servlet:
+    context-path: /api
+    session:
+      timeout: 2592000 # 30
+
+spring:
+  profiles:
+    active: local-dev
+  jackson:
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+    date-format: yyyy-MM-dd HH:mm:ss
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+  mvc:
+    async:
+      request-timeout: 60000
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /doc.html
+
+logging:
+  config: classpath:logback-spring.xml

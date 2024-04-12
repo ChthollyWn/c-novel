@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>C-Novel Bot</title>
+    <!-- Import style -->
+    <link rel="stylesheet" href="index.css"/>
+    <!-- Import Vue 3 -->
+    <script src="//cdn.jsdelivr.net/npm/vue@3"></script>
+    <!-- Import component library -->
+    <script src="//cdn.jsdelivr.net/npm/element-plus"></script>
+    <style>
+        @font-face {
+            font-family: 'CustomFont';
+            src: url('c207f68a84deae3.woff2') format('woff2'),
+            url('c207f68a84deae3-700.woff2') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+        #app {
+            margin: 20px;
+        }
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+        .message-box {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; /* 默认左对齐 */
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            height: 650px;
+            overflow-y: auto;
+            font-family: 'CustomFont', sans-serif;
+            font-size: 16px;
+        }
+
+        .message-card {
+            max-width: 45%;
+            margin: 10px 10px 10px 10px;
+            flex: 0 0 auto;
+            overflow-wrap: break-word;
+            align-self: flex-start; /* 默认左对齐 */
+        }
+
+        .message-right {
+            align-self: flex-end; /* 右对齐 */
+        }
+
+        .small-text { font-size: 14px; }
+        .medium-text { font-size: 16px; }
+        .large-text { font-size: 18px; }
+
+        .message-card img,
+        .message-card table {
+            max-width: 100%; /* 限制图片或表格的最大宽度，使其不超过卡片宽度 */
+            height: auto; /* 保持图片的纵横比 */
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="message-box" ref="messageBox">
+        <el-card
+                class="message-card"
+                v-for="message in messages"
+                :key="message.id"
+                :class="message.class">
+            <div v-html="message.data"></div>
+        </el-card>
+    </div>
+    <div class="input-row">
+        <el-input v-model="text" placeholder="请输入消息" @keyup.enter="sendCommand"></el-input>
+        <el-button @click="sendCommand">发送命令</el-button>
+    </div>
+</div>
+
+<script>
+    const { createApp } = Vue;
+    const { ElInput, ElButton, ElCard } = ElementPlus;
+
+    createApp({
+        components: {
+            ElInput,
+            ElButton,
+            ElCard
+        },
+        data() {
+            return {
+                ws: null,
+                text: '',
+                messages: [],
+                messageId: 0,
+                retryInterval: 1000, // 重试间隔时间设置为1秒
+                retryStartTime: null // 记录开始重试的时间
+            };
+        },
+        methods: {
+            connectWebSocket() {
+                this.ws = new WebSocket('ws://localhost:8001/api/fanqie/channel/0');
+                this.ws.onopen = () => {
+                    this.appendMessage("主机连接成功", '');
+                };
+                this.ws.onclose = () => {
+                    this.appendMessage("主机连接断开，尝试重新连接...", '');
+                    setTimeout(() => {
+                        this.connectWebSocket();
+                    }, this.retryInterval);
+                };
+                this.ws.onerror = error => {
+                    this.appendMessage("主机连接失败，请检查网络", '');
+                };
+                this.ws.onmessage = this.handleMessage;
+            },
+            sendCommand() {
+                if (this.ws.readyState === WebSocket.OPEN && this.text.trim() !== '') {
+                    this.ws.send(this.text);
+                    this.text = '';
+                }
+            },
+            handleMessage(event) {
+                const messageData = JSON.parse(event.data);
+                let messageClass = 'message-left'; // 默认左对齐
+                if (messageData.type === 'text') {
+                    this.appendMessage(messageData.data.replace(/\n/g, '<br>'), '');
+                } else if (messageData.type === "img-base64") {
+                    const imageData = `<img src="data:image/jpeg;base64,${messageData.data}" alt="loaded image"/>`;
+                    this.appendMessage(imageData, '');
+                } else if (messageData.type === "message") {
+                    // 根据 fromType 来决定对齐方式
+                    messageClass = messageData.data.fromType === 'Server' ? 'message-left' : 'message-right';
+                    this.appendMessage(messageData.data.content.replace(/\n/g, '<br>'), messageClass);
+                } else {
+                    this.appendMessage(JSON.stringify(messageData).replace(/\n/g, '<br>'), '');
+                }
+            },
+            appendMessage(data, messageClass) {
+                this.messages.push({ id: this.messageId++, data: data, class: messageClass });
+                this.$nextTick(() => {
+                    const messageBox = this.$refs.messageBox;
+                    if (messageBox) {
+                        // 确保滚动到底部的操作在DOM更新后执行
+                        this.$nextTick(() => {
+                            messageBox.scrollTop = messageBox.scrollHeight;
+                        });
+                    }
+                });
+            },
+        },
+        mounted() {
+            this.connectWebSocket();
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
