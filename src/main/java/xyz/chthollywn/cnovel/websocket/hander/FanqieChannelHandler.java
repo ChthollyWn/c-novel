@@ -8,6 +8,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import xyz.chthollywn.cnovel.common.enums.MessageTypeEnums;
+import xyz.chthollywn.cnovel.common.resp.FacadeException;
 import xyz.chthollywn.cnovel.common.resp.PageDTO;
 import xyz.chthollywn.cnovel.common.resp.ResponseDTO;
 import xyz.chthollywn.cnovel.common.resp.ResponseException;
@@ -41,6 +42,7 @@ public class FanqieChannelHandler {
     private static final List<String> COMMAND_TEST = Lists.newArrayList("/test", "/TEST", "/测试");
     private static final List<String> COMMAND_HELP = Lists.newArrayList("/help", "/menu", "/帮助", "/菜单");
     private static final List<String> COMMAND_LOGIN_QRCODE = Lists.newArrayList("/login", "/qrcode", "/登录", "/二维码登录");
+    private static final List<String> COMMAND_CHECK_USER = Lists.newArrayList("/check", "/check-user", "校验用户有效性");
     private static final List<String> COMMAND_BOOK_SEARCH = Lists.newArrayList("/search", "/book-search", "/搜书");
     private static final List<String> COMMAND_BOOK_DETAIL = Lists.newArrayList("/detail", "/book-detail", "/详情");
     private static final List<String> COMMAND_CHAPTER_FULL = Lists.newArrayList("/full", "/chapter-full", "/read", "/读书");
@@ -134,14 +136,41 @@ public class FanqieChannelHandler {
 
     public void sendMenu(String userId) {
         String menu = """
-                        欢迎使用C-Novel
-                        请使用 [/命令 参数] 的格式发送命令
-                        [/test]                测试websocket工作是否正常
-                        [/help]                获取帮助列表
-                        [/login]               通过二维码登录番茄账号
-                        [/search [queryWord]]  通过关键字查询书籍
-                        [/detail [bookId]]     通过书籍ID获取书籍详情
-                        [/full [itemId]]       通过itemId阅读单章小说""";
+                <table>
+                    <tr>
+                      <td>欢迎使用C-Novel</td>
+                      <td></td>
+                    </tr>
+                    <tr>
+                      <td>请使用 [/命令 参数] 的格式发送命令</td>
+                      <td></td>
+                    </tr>
+                    <tr>
+                      <td>[/test]</td>
+                      <td>测试websocket工作是否正常</td>
+                    </tr>
+                    <tr>
+                      <td>[/help]</td>
+                      <td>获取帮助列表</td>
+                    </tr>
+                    <tr>
+                      <td>[/login]</td>
+                      <td>通过二维码登录番茄账号</td>
+                    </tr>
+                    <tr>
+                      <td>[/search [queryWord]]</td>
+                      <td>通过关键字查询书籍</td>
+                    </tr>
+                    <tr>
+                      <td>[/detail [bookId]]</td>
+                      <td>通过书籍ID获取书籍详情</td>
+                    </tr>
+                    <tr>
+                      <td>[/full [itemId]]</td>
+                      <td>通过itemId阅读单章小说</td>
+                    </tr>
+              </table>
+              """;
         sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.TEXT, menu));
     }
 
@@ -158,40 +187,57 @@ public class FanqieChannelHandler {
         }
 
         // 所有命令都分为 [/command value] 格式
-        ArrayList<String> strings = Lists.newArrayList(message.split(" ", 2));
+        ArrayList<String> strings = Lists.newArrayList(message.split(" "));
         if (!strings.get(0).startsWith("/")) {
             sendMessageAndSave(userId, ResponseDTO.socketError("无效的命令"));
             return;
         }
 
         String command = strings.get(0);
-        String value = null;
-        if (strings.size() > 1)
-            value = strings.get(1);
+        strings.remove(0);
 
-        if (COMMAND_TEST.contains(command)) {
-            // 测试成功
-            sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.TEXT, "测试成功"));
-        } else if (COMMAND_HELP.contains(command)) {
-            // 发送菜单
-            sendMenu(userId);
-        } else if (COMMAND_LOGIN_QRCODE.contains(command)) {
-            // 发送登录二维码的base64编码
-            String base64Str = fanqieAccountService.getQrcodeBase64Str(userId);
-            sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.IMG_BASE64, base64Str));
-            sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.TEXT, "二维码生成成功，请及时扫码登录"));
-        } else if (COMMAND_BOOK_SEARCH.contains(command)) {
-            // 书籍搜索
-            PageDTO<SearchBookResponse.BookData> pageDTO = fanqieNovelService.searchBookPage(0, value);
-            sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.BOOK_PAGE, pageDTO));
-        } else if (COMMAND_BOOK_DETAIL.contains(command)) {
-            BookDetailResponse.ResponseData responseData = fanqieNovelService.bookDetail(value);
-            sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.BOOK_DETAIL, responseData));
-        } else if (COMMAND_CHAPTER_FULL.contains(command)) {
-            ChapterFullResponse.ResponseData responseData = fanqieNovelService.chapterFull(value);
-            sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.CHAPTER_FULL, responseData));
-        } else {
-            sendMessageAndSave(userId, ResponseDTO.socketError("无效的命令"));
+        try {
+            if (COMMAND_TEST.contains(command)) {
+                // 测试成功
+                sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.TEXT, "测试成功"));
+            } else if (COMMAND_HELP.contains(command)) {
+                // 发送菜单
+                sendMenu(userId);
+            } else if (COMMAND_LOGIN_QRCODE.contains(command)) {
+                // 发送登录二维码的base64编码
+                String base64Str = fanqieAccountService.getQrcodeBase64Str(userId);
+                sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.IMG_BASE64, base64Str));
+                sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.TEXT, "二维码生成成功，请及时扫码登录"));
+            } else if (COMMAND_CHECK_USER.contains(command)) {
+                Boolean isVip = fanqieAccountService.checkUserIsVip();
+                if (isVip) {
+                    sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.TEXT, "当前用户有效！"));
+                } else {
+                    sendMessageAndSave(userId, ResponseDTO.socketError("当前用户无效，请重新扫码登录！"));
+                }
+            } else if (COMMAND_BOOK_SEARCH.contains(command)) {
+                // 书籍搜索
+                String queryWord = null;
+                Integer pageIndex = null;
+                if (!strings.isEmpty()) queryWord = strings.get(0);
+                if (strings.size() > 1) pageIndex = Integer.valueOf(strings.get(1));
+                PageDTO<SearchBookResponse.BookData> pageDTO = fanqieNovelService.searchBookPage(pageIndex, queryWord);
+                sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.BOOK_PAGE, pageDTO));
+            } else if (COMMAND_BOOK_DETAIL.contains(command)) {
+                String bookId = null;
+                if (!strings.isEmpty()) bookId = strings.get(0);
+                BookDetailResponse.ResponseData responseData = fanqieNovelService.bookDetail(bookId);
+                sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.BOOK_DETAIL, responseData));
+            } else if (COMMAND_CHAPTER_FULL.contains(command)) {
+                String itemId = null;
+                if (!strings.isEmpty()) itemId = strings.get(0);
+                ChapterFullResponse.ResponseData responseData = fanqieNovelService.chapterFull(itemId);
+                sendMessageAndSave(userId, ResponseDTO.socketSuccess(ResponseDTO.CHAPTER_FULL, responseData));
+            } else {
+                sendMessageAndSave(userId, ResponseDTO.socketError("无效的命令"));
+            }
+        } catch (FacadeException e) {
+            sendMessageAndSave(userId, ResponseDTO.socketError(e.getMessage()));
         }
     }
 

@@ -4,19 +4,41 @@
     <meta charset="UTF-8">
     <title>C-Novel Bot</title>
     <!-- Import style -->
-    <link rel="stylesheet" href="index.css"/>
-    <!-- Import Vue 3 -->
-    <script src="//cdn.jsdelivr.net/npm/vue@3"></script>
-    <!-- Import component library -->
-    <script src="//cdn.jsdelivr.net/npm/element-plus"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css"/>
+    <!-- 尝试从unpkg加载Vue -->
+    <script src="https://unpkg.com/vue@3"></script>
+    <!-- 如果加载失败，从jsDelivr加载Vue -->
+    <script>
+        if (typeof Vue === 'undefined') {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3"><\/script>');
+        }
+    </script>
+
+    <!-- 尝试从unpkg加载Element Plus -->
+    <script src="https://unpkg.com/element-plus"></script>
+    <!-- 如果加载失败，从jsDelivr加载Element Plus -->
+    <script>
+        if (typeof ElementPlus === 'undefined') {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/element-plus"><\/script>');
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@element-plus/icons-vue"></script>
     <style>
         @font-face {
-            font-family: 'CustomFont';
-            src: url('c207f68a84deae3.woff2') format('woff2'),
-            url('c207f68a84deae3-700.woff2') format('woff');
+            font-family: 'BookPageFont';
+            src: url('./font/c207f68a84deae3.woff2') format('woff2');
             font-weight: normal;
             font-style: normal;
         }
+
+        @font-face {
+            font-family: 'ChapterFullFont';
+            src: url('./font/dc027189e0ba4cd.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+        }
+
         #app {
             margin: 20px;
         }
@@ -31,14 +53,19 @@
             border: 1px solid #ccc;
             padding: 10px;
             margin-bottom: 10px;
-            height: 650px;
+            height: 85vh;
             overflow-y: auto;
-            font-family: 'CustomFont', sans-serif;
             font-size: 16px;
+            font-family: 'ChapterFullFont', sans-serif;
+            border-radius: 10px;
+        }
+
+        .message-box .book-page-style {
+            font-family: 'BookPageFont', sans-serif !important;
         }
 
         .message-card {
-            max-width: 45%;
+            max-width: 75%;
             margin: 10px 10px 10px 10px;
             flex: 0 0 auto;
             overflow-wrap: break-word;
@@ -58,18 +85,35 @@
             max-width: 100%; /* 限制图片或表格的最大宽度，使其不超过卡片宽度 */
             height: auto; /* 保持图片的纵横比 */
         }
+        p {
+            text-indent: 2em; /* 设置段落首行缩进为2em，em是相对单位，相对于当前字体尺寸 */
+        }
+
     </style>
 </head>
 <body>
 <div id="app">
     <div class="message-box" ref="messageBox">
-        <el-card
-                class="message-card"
+        <component
                 v-for="message in messages"
                 :key="message.id"
-                :class="message.class">
-            <div v-html="message.data"></div>
-        </el-card>
+                :is="message.type === 'book' ? 'BookCard' : 'ElCard'"
+                v-bind="message.type === 'book' ? {book: message.data} : {class: 'message-card ' + message.class, body: message.data}"
+                @book-click="sendBookId">
+            <template v-if="message.type !== 'book'">
+                <div v-if="message.type === 'chapter-full'" style="display: flex; justify-content: space-between;">
+                    <el-button @click="sendChapterId(message.preItemId)" style="margin-right: auto;">上一章</el-button>
+                    <el-button @click="sendBookId(message.bookId)" >目录</el-button>
+                    <el-button @click="sendChapterId(message.nextItemId)" style="margin-left: auto;">下一章</el-button>
+                </div>
+                <div v-html="message.data"></div>
+                <div v-if="message.type === 'chapter-full'" style="display: flex; justify-content: space-between;">
+                    <el-button @click="sendChapterId(message.preItemId)" style="margin-right: auto;">上一章</el-button>
+                    <el-button @click="sendBookId(message.bookId)" >目录</el-button>
+                    <el-button @click="sendChapterId(message.nextItemId)" style="margin-left: auto;">下一章</el-button>
+                </div>
+            </template>
+        </component>
     </div>
     <div class="input-row">
         <el-input v-model="text" placeholder="请输入消息" @keyup.enter="sendCommand"></el-input>
@@ -81,11 +125,37 @@
     const { createApp } = Vue;
     const { ElInput, ElButton, ElCard } = ElementPlus;
 
+    // 定义BookCard组件
+    const BookCard = {
+        components: {
+            ElCard
+        },
+        props: ['book'],
+        template: `
+        <el-card class="message-card book-page-style" @click="handleClick" style="cursor: pointer; width: 100%;">
+            <img :src="book.thumb_url" alt="封面" style="width: 100px; height: auto;">
+            <div style="margin-left: 20px;">
+                <h3>{{ book.book_name }}</h3>
+                <p>作者: {{ book.author }}</p>
+                <p>分类: {{ book.category }}</p>
+                <p>简介: {{ book.book_abstract }}</p>
+            </div>
+        </el-card>
+    `,
+        methods: {
+            handleClick() {
+                this.$emit('book-click', this.book.book_id);
+            }
+        }
+    };
+
+
     createApp({
         components: {
             ElInput,
             ElButton,
-            ElCard
+            ElCard,
+            BookCard
         },
         data() {
             return {
@@ -94,7 +164,6 @@
                 messages: [],
                 messageId: 0,
                 retryInterval: 1000, // 重试间隔时间设置为1秒
-                retryStartTime: null // 记录开始重试的时间
             };
         },
         methods: {
@@ -123,21 +192,119 @@
             handleMessage(event) {
                 const messageData = JSON.parse(event.data);
                 let messageClass = 'message-left'; // 默认左对齐
+                console.log(messageData)
                 if (messageData.type === 'text') {
-                    this.appendMessage(messageData.data.replace(/\n/g, '<br>'), '');
+                    if (messageData.data !== null) {
+                        messageData.data = messageData.data.trim()
+                        this.appendMessage(messageData.data, '');
+                    } else {
+                        this.appendMessage(messageData.message, '')
+                    }
+                    this.scrollToBottom()
                 } else if (messageData.type === "img-base64") {
                     const imageData = `<img src="data:image/jpeg;base64,${messageData.data}" alt="loaded image"/>`;
                     this.appendMessage(imageData, '');
                 } else if (messageData.type === "message") {
                     // 根据 fromType 来决定对齐方式
                     messageClass = messageData.data.fromType === 'Server' ? 'message-left' : 'message-right';
-                    this.appendMessage(messageData.data.content.replace(/\n/g, '<br>'), messageClass);
+                    this.appendMessage(messageData.data.content, messageClass);
+                    this.scrollToBottom()
+                } else if (messageData.type === "history") {
+                    let messageList = messageData.data;
+                    for (const message of messageList) {
+                        if (message.fromType === "Server") {
+                            const fakeEvent = { data: message.content };
+                            this.handleMessage(fakeEvent);
+                        } else {
+                            messageClass = 'message-right';
+                            this.appendMessage(message.content, messageClass);
+                        }
+                    }
+                    this.scrollToBottom()
+                } else if (messageData.type === "book-page") {
+                    let bookList = messageData.data.records;
+                    let pageInfo = `当前页: ${messageData.data.current + 1} / 总页数: ${messageData.data.pages}，书籍总数: ${messageData.data.total}`;
+                    for (const book of bookList) {
+                        // 使用组件来渲染书籍信息
+                        this.appendMessage({ type: 'book', data: book }, '');
+                    }
+                    // 添加页码信息
+                    this.appendMessage(pageInfo, 'small-text');
+                    this.scrollHalfWindow()
+                } else if (messageData.type === "book-detail") {
+                    let chapterVolumeList = messageData.data.chapterListWithVolume;
+                    let volumeNameList = messageData.data.volumeNameList;
+
+                    let bookDetail = `<div style="display: block; width: 100%; overflow-x: auto;">`;
+                    for (let i = 0; i < chapterVolumeList.length; i++) {
+                        let volumeName = volumeNameList[i];
+                        let chapters = chapterVolumeList[i];
+                        bookDetail += `<table style="width: auto; min-width: 100%; border-collapse: collapse; margin-bottom: 20px;">`;
+                        bookDetail += `<thead><tr><th colspan="3" style="text-align: left; border-bottom: 2px solid #ddd; padding: 8px;">${volumeName}</th></tr></thead><tbody>`;
+
+                        for (let j = 0; j < chapters.length; j++) {
+                            if (j % 3 === 0) {
+                                if (j !== 0) bookDetail += `</tr>`;
+                                bookDetail += `<tr>`;
+                            }
+                            // 修改此处，为每个章节添加onclick事件处理器
+                            bookDetail += `<td style="padding: 4px; border-bottom: 1px solid #f0f0f0; cursor: pointer;" onclick="sendChapterId('${chapters[j].itemId}')">${chapters[j].title}</td>`;
+                        }
+                        bookDetail += `</tr></tbody>`;
+                        bookDetail += `</table>`;
+                    }
+                    bookDetail += `</div>`;
+
+                    this.appendMessage(bookDetail, '');
+                    this.scrollHalfWindow()
+                } else if (messageData.type === "chapter-full") {
+                    // 处理章节内容和图片
+                    let chapterData = messageData.data.chapterData;
+                    let chapterContent = chapterData.content.replace(/{{image_domain}}/g, "http://p3-reading-sign.fqnovelpic.com/");
+                    let chapterTitle = chapterData.title;
+                    let fullInfo = `
+                        <div>
+                            <h3>${chapterTitle}</h3>
+                            <p>${chapterContent}</p>
+                        </div>
+                    `;
+
+                    this.appendMessage({type: 'chapter-full', data: fullInfo, preItemId: chapterData.preItemId, nextItemId: chapterData.nextItemId, bookId: chapterData.bookId}, 'medium-text')
+                    this.scrollHalfWindow()
                 } else {
-                    this.appendMessage(JSON.stringify(messageData).replace(/\n/g, '<br>'), '');
+                    this.appendMessage(JSON.stringify(messageData), '');
+                    this.scrollToBottom()
                 }
             },
             appendMessage(data, messageClass) {
-                this.messages.push({ id: this.messageId++, data: data, class: messageClass });
+                // 修改appendMessage以处理书籍信息
+                if (data !== null && (typeof data === 'object' &&
+                    (data.type === 'book' || data.type === 'chapter-full'))) {
+                    // 对于书籍信息，我们直接推送整个对象，包括类型
+                    this.messages.push(data);
+                } else {
+                    // 对于其他类型的消息，保持原有逻辑
+                    const message = { id: this.messageId++, data, class: messageClass};
+                    this.messages.push(message);
+                }
+            },
+
+            sendBookId(bookId) {
+                // 发送书籍ID到服务端的逻辑
+                console.log("Sending bookId to server:", bookId);
+                if (this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send("/detail " + bookId);
+                }
+            },
+
+            sendChapterId(chapterId) {
+                console.log("Sending chapterId to server: " + chapterId );
+                if (this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send("/full " + chapterId);
+                }
+            },
+
+            scrollToBottom() {
                 this.$nextTick(() => {
                     const messageBox = this.$refs.messageBox;
                     if (messageBox) {
@@ -148,9 +315,27 @@
                     }
                 });
             },
+
+            scrollHalfWindow() {
+                this.$nextTick(() => {
+                    const messageBox = this.$refs.messageBox;
+                    if (messageBox) {
+                        // 确保滚动到底部的操作在DOM更新后执行
+                        this.$nextTick(() => {
+                            // 获取视窗高度的一半
+                            const halfViewportHeight = window.innerHeight * 0.75;
+                            // 将当前滚动位置向下移动半个视窗高度
+                            messageBox.scrollTop += halfViewportHeight;
+                        });
+                    }
+                });
+            }
+
         },
         mounted() {
             this.connectWebSocket();
+            // 在全局作用域中创建sendChapterId方法的引用，以便在HTML字符串中使用
+            window.sendChapterId = this.sendChapterId.bind(this);
         }
     }).mount('#app');
 </script>

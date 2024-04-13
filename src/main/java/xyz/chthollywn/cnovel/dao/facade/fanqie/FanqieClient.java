@@ -10,10 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 import xyz.chthollywn.cnovel.common.resp.FacadeException;
-import xyz.chthollywn.cnovel.dao.facade.fanqie.entity.BookDetailResponse;
-import xyz.chthollywn.cnovel.dao.facade.fanqie.entity.ChapterFullResponse;
-import xyz.chthollywn.cnovel.dao.facade.fanqie.entity.GetQrcodeResponse;
-import xyz.chthollywn.cnovel.dao.facade.fanqie.entity.SearchBookResponse;
+import xyz.chthollywn.cnovel.dao.facade.fanqie.entity.*;
 import xyz.chthollywn.cnovel.strategy.cache.CacheService;
 import xyz.chthollywn.cnovel.strategy.cache.CacheStrategy;
 
@@ -71,6 +68,22 @@ public class FanqieClient {
     }
 
     /**
+     * 获取用户信息
+     * @param sid_tt
+     * @return
+     */
+    public ResponseEntity<UserInfoResponse> getUserInfo(String sid_tt) {
+        String baseUrl = "https://fanqienovel.com/api/user/info/v2";
+
+        HttpHeaders httpHeaders = new HttpHeaders();
+        if (StringUtils.isNotBlank(sid_tt))
+            httpHeaders.add(HttpHeaders.COOKIE, "sid_tt=" + sid_tt);
+        HttpEntity<String> httpEntity = new HttpEntity<>(httpHeaders);
+
+        return restTemplate.exchange(baseUrl, HttpMethod.GET, httpEntity, UserInfoResponse.class);
+    }
+
+    /**
      * 书籍搜索
      * @param pageCount 每页数据数量
      * @param pageIndex 页码 从0开始
@@ -112,7 +125,7 @@ public class FanqieClient {
 
         HttpHeaders httpHeaders = new HttpHeaders();
         if (StringUtils.isNotBlank(sid_tt))
-            httpHeaders.set("sid_tt", sid_tt);
+            httpHeaders.add(HttpHeaders.COOKIE, "sid_tt=" + sid_tt);
         HttpEntity<String> httpEntity = new HttpEntity<>(httpHeaders);
 
         return restTemplate.exchange(url, HttpMethod.GET, httpEntity, ChapterFullResponse.class);

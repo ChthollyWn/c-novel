@@ -42,6 +42,8 @@ public class FanqieNovelService {
     }
 
     public PageDTO<SearchBookResponse.BookData> searchBookPage(Integer pageIndex, String queryWord) {
+        if (pageIndex == null) pageIndex = 0;
+        else pageIndex = pageIndex - 1;
         return searchBookPage(10, pageIndex, 0, queryWord);
     }
 
@@ -51,7 +53,7 @@ public class FanqieNovelService {
             throw new FacadeException("HTTP异常 " + responseEntity);
         BookDetailResponse detailResponse = responseEntity.getBody();
         if (detailResponse == null)
-            throw new FacadeException("书籍详情数据不存在" + responseEntity);
+            throw new FacadeException("书籍详情数据不存在 " + responseEntity);
         if (!Objects.equals(detailResponse.getCode(), 0))
             throw new FacadeException("数据详情数据获取异常 " + detailResponse);
         return detailResponse.getData();
@@ -68,13 +70,11 @@ public class FanqieNovelService {
             throw new FacadeException("HTTP异常 " + responseEntity);
         ChapterFullResponse fullResponse = responseEntity.getBody();
         if (fullResponse == null)
-            throw new FacadeException("章节详情数据不存在" + responseEntity);
+            throw new FacadeException("章节详情数据不存在 " + responseEntity);
         if (!Objects.equals(fullResponse.getCode(), 0))
-            throw new FacadeException("章节详情数据获取失败" + fullResponse);
+            throw new FacadeException("章节详情数据获取失败 " + fullResponse);
 
         ChapterFullResponse.ChapterData chapterData = fullResponse.getData().getChapterData();
-        if (chapterData.getIsChapterLock())
-            throw new FacadeException("章节已锁，sid_tt失效");
 
         return fullResponse.getData();
     }
